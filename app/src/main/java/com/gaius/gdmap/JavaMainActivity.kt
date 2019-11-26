@@ -1,78 +1,65 @@
 package com.gaius.gdmap
 
-
+import android.app.Activity
 import android.os.Bundle
-import android.view.LayoutInflater
-import android.view.View
-import android.view.ViewGroup
-import androidx.fragment.app.Fragment
+import android.widget.Button
 import com.amap.api.maps.AMap
+import com.amap.api.maps.CameraUpdateFactory
 import com.amap.api.maps.MapView
 import com.amap.api.maps.model.LatLng
-import com.gaius.gdmap.databinding.FragmentHomeBinding
+import com.amap.api.maps.model.LatLngBounds
+import com.amap.api.maps.utils.overlay.SmoothMoveMarker
+import java.util.*
 
-/**
- * A simple [Fragment] subclass.
- */
-class HomeFragment : Fragment() {
-
-    //private var mapView: MapView? = null
-    private lateinit var mapView: MapView
-    private var aMap: AMap? = null
-
-    override fun onCreateView(
-        inflater: LayoutInflater, container: ViewGroup?,
-        savedInstanceState: Bundle?
-    ): View? {
-        val binding = FragmentHomeBinding.inflate(inflater, container, false)
-        mapView = binding.gdMap
-        mapView.onCreate(savedInstanceState)
-        val btnStart = binding.btnStartHomeFragment
-        btnStart.setOnClickListener { play() }
-
-        init()
-        return binding.root
+class JavaMainActivity : Activity() {
+    private val mapView: MapView? = null
+    private val aMap: AMap? = null
+    private val mStartButton: Button? = null
+    private var moveMarker: SmoothMoveMarker? = null
+    private val mMarkerStatus = START_STATUS
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContentView(R.layout.activity_main)
+        initMoveMarker()
     }
 
-    private fun init() {
-        if (aMap == null) aMap = mapView.map
-
+    private fun initMoveMarker() {
+        addPolylineInPlayGround()
+        // 获取轨迹坐标点
+        val points = readLatLngs()
+        val b = LatLngBounds.builder()
+        for (i in points.indices) {
+            b.include(points[i])
+        }
+        val bounds = b.build()
+        aMap!!.animateCamera(CameraUpdateFactory.newLatLngBounds(bounds, 100))
+        moveMarker = SmoothMoveMarker(aMap)
+        // 设置滑动的图标
+//moveMarker.setDescriptor(BitmapDescriptorFactory.fromResource(R.drawable.car));
+/*
+        //当移动Marker的当前位置不在轨迹起点，先从当前位置移动到轨迹上，再开始平滑移动
+        // LatLng drivePoint = points.get(0);//设置小车当前位置，可以是任意点，这里直接设置为轨迹起点
+        LatLng drivePoint = new LatLng(39.980521,116.351905);//设置小车当前位置，可以是任意点
+        Pair<Integer, LatLng> pair = PointsUtil.calShortestDistancePoint(points, drivePoint);
+        points.set(pair.first, drivePoint);
+        List<LatLng> subList = points.subList(pair.first, points.size());
+        // 设置滑动的轨迹左边点
+        smoothMarker.setPoints(subList);*/moveMarker!!.setPoints(points) //设置平滑移动的轨迹list
+        moveMarker!!.setTotalDuration(40) //设置平滑移动的总时间
     }
 
-
-    private fun play() {
-        TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
-    }
-
-    override fun onResume() {
-        super.onResume()
-        mapView.onResume()
-    }
-
-    override fun onPause() {
-        super.onPause()
-        mapView.onPause()
-    }
-
-    override fun onSaveInstanceState(outState: Bundle) {
-        super.onSaveInstanceState(outState)
-        mapView.onSaveInstanceState(outState)
-    }
-
-    override fun onDestroy() {
-        super.onDestroy()
-        mapView.onDestroy()
-    }
-
-    private fun readLatLng(): List<LatLng> {
-        val points = mutableListOf<LatLng>()
-        for (i in points) {
-
+    private fun addPolylineInPlayGround() {}
+    private fun readLatLngs(): List<LatLng> {
+        val points: MutableList<LatLng> = ArrayList()
+        var i = 0
+        while (i < coords.size) {
+            points.add(LatLng(coords[i + 1], coords[i]))
+            i += 2
         }
         return points
     }
 
-    private val coordinate = doubleArrayOf(
+    private val coords = doubleArrayOf(
         116.3499049793749, 39.97617053371078,
         116.34978804908442, 39.97619854213431, 116.349674596623,
         39.97623045687959, 116.34955525200917, 39.97626931100656,
@@ -89,8 +76,8 @@ class HomeFragment : Fragment() {
         116.34822111635201, 39.97698451764595, 116.34822901510276,
         39.977079745909876, 116.34822234337618, 39.97718701787645,
         116.34821627457707, 39.97730766147824, 116.34820593515043,
-        39.977417746816776, 116.34821013897107, 39.97753930933358,
-        116.34821304891533, 39.977652209132174, 116.34820923399242,
+        39.977417746816776, 116.34821013897107, 39.97753930933358
+        , 116.34821304891533, 39.977652209132174, 116.34820923399242,
         39.977764016531076, 116.3482045955917, 39.97786190186833,
         116.34822159449203, 39.977958856930286, 116.3482256370537,
         39.97807288885813, 116.3482098441266, 39.978170063673524,
@@ -127,4 +114,11 @@ class HomeFragment : Fragment() {
         116.34549232235582, 39.98105271658809, 116.34537348820508,
         39.981052294975264, 116.3453513775533, 39.980956549928244
     )
+
+    companion object {
+        private const val START_STATUS = 0
+        private const val MOVE_STATUS = 1
+        private const val PAUSE_STATUS = 2
+        private const val FINISH_STATUS = 3
+    }
 }

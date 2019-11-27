@@ -5,10 +5,15 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.Button
+import android.widget.LinearLayout
+import android.widget.TextView
 import androidx.fragment.app.Fragment
 import com.amap.api.maps.AMap
+import com.amap.api.maps.CameraUpdateFactory
 import com.amap.api.maps.MapView
-import com.amap.api.maps.model.LatLng
+import com.amap.api.maps.model.*
+import com.amap.api.maps.utils.overlay.SmoothMoveMarker
 import com.gaius.gdmap.databinding.FragmentHomeBinding
 
 /**
@@ -19,6 +24,14 @@ class HomeFragment : Fragment() {
     //private var mapView: MapView? = null
     private lateinit var mapView: MapView
     private var aMap: AMap? = null
+    private var moveMarker: SmoothMoveMarker? = null
+    private var mStartBtn: Button? = null
+
+    private val START_STATUS = 0
+    private val MOVE_STATUS = 1
+    private val PAUSE_STATUS = 2
+    private val FINISH_STATUS = 3
+    private var mMarkerStatus = START_STATUS
 
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
@@ -27,8 +40,8 @@ class HomeFragment : Fragment() {
         val binding = FragmentHomeBinding.inflate(inflater, container, false)
         mapView = binding.gdMap
         mapView.onCreate(savedInstanceState)
-        val btnStart = binding.btnStartHomeFragment
-        btnStart.setOnClickListener { play() }
+        mStartBtn = binding.btnStartHomeFragment
+        mStartBtn!!.setOnClickListener { play() }
 
         init()
         return binding.root
@@ -36,17 +49,78 @@ class HomeFragment : Fragment() {
 
     private fun init() {
         if (aMap == null) aMap = mapView.map
-
     }
 
+    private fun initMoveMarker() {
+        addPolylineInPlayGround()
+        val points = readLatLng()
+        val builder = LatLngBounds.builder()
+        for (i in points.indices) {
+            builder.include(points[i])
+        }
+
+        val bounds = builder.build()
+        aMap!!.animateCamera(CameraUpdateFactory.newLatLngBounds(bounds, 100))
+        moveMarker = SmoothMoveMarker(aMap)
+        moveMarker!!.setDescriptor(BitmapDescriptorFactory.fromResource(R.drawable.car))
+        moveMarker!!.setPoints(points)
+        moveMarker!!.setTotalDuration(40)
+
+        aMap!!.setInfoWindowAdapter(infoWindowAdapter)
+        moveMarker!!.setMoveListener {
+            SmoothMoveMarker.MoveListener { distance: Double ->
+                run {
+                    activity!!.runOnUiThread {
+                        if (infoWindowLayout != null && title != null && moveMarker!!.marker.isInfoWindowShown) {
+                            title!!.text = "距离终点还有: " + distance.toInt() + "米"
+                        }
+                        if (distance.toInt() == 0) {
+                            moveMarker!!.marker.hideInfoWindow()
+                            mMarkerStatus = FINISH_STATUS
+                            mStartBtn!!.text = "开始"
+                        }
+                    }
+                }
+            }
+        }
+
+        moveMarker!!.marker.showInfoWindow()
+    }
 
     private fun play() {
-        TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
+        when (mMarkerStatus) {
+            START_STATUS -> {
+                moveMarker!!.startSmoothMove()
+                mMarkerStatus = MOVE_STATUS
+                mStartBtn!!.text = "暂停"
+            }
+            MOVE_STATUS -> {
+                moveMarker!!.stopMove()
+                mMarkerStatus = PAUSE_STATUS
+                mStartBtn!!.text = "继续"
+            }
+            PAUSE_STATUS -> {
+                moveMarker!!.startSmoothMove()
+                mMarkerStatus = MOVE_STATUS
+                mStartBtn!!.text = "暂停"
+            }
+            FINISH_STATUS -> {
+                moveMarker!!.position = LatLng(39.97617053371078, 116.3499049793749)
+                val points = readLatLng()
+                moveMarker!!.setPoints(points)
+                moveMarker!!.marker.showInfoWindow()
+                moveMarker!!.startSmoothMove()
+
+                mMarkerStatus = MOVE_STATUS
+                mStartBtn!!.text = "暂停"
+            }
+        }
     }
 
     override fun onResume() {
         super.onResume()
         mapView.onResume()
+        initMoveMarker()
     }
 
     override fun onPause() {
@@ -64,10 +138,46 @@ class HomeFragment : Fragment() {
         mapView.onDestroy()
     }
 
-    private fun readLatLng(): List<LatLng> {
-        val points = mutableListOf<LatLng>()
-        for (i in points) {
+    private var infoWindowAdapter: AMap.InfoWindowAdapter = object : AMap.InfoWindowAdapter {
+        override fun getInfoWindow(marker: Marker): View {
+            return getInfoWindowView(marker)
+        }
 
+        override fun getInfoContents(marker: Marker): View {
+            return getInfoWindowView(marker)
+        }
+    }
+
+    var infoWindowLayout: LinearLayout? = null
+    var title: TextView? = null
+    var snippet: TextView? = null
+    private fun getInfoWindowView(marker: Marker): View {
+        if (infoWindowLayout == null) {
+            infoWindowLayout = LinearLayout(activity)
+            infoWindowLayout!!.orientation = LinearLayout.VERTICAL
+            title = TextView(activity)
+            snippet = TextView(activity)
+            infoWindowLayout!!.setBackgroundResource(R.drawable.infowindow_bg)
+            infoWindowLayout!!.addView(title)
+            infoWindowLayout!!.addView(snippet)
+        }
+        return infoWindowLayout!!
+    }
+
+    private fun addPolylineInPlayGround() {
+        val list = readLatLng()
+        aMap!!.addPolyline(
+            PolylineOptions().setCustomTexture(BitmapDescriptorFactory.fromResource(R.drawable.custtexture))
+                .addAll(list)
+                .useGradient(true)
+                .width(18F)
+        )
+    }
+
+    private fun readLatLng(): List<LatLng> {
+        val points: MutableList<LatLng> = ArrayList()
+        for (i in points.indices) {
+            points.add(LatLng(coordinate[i + 1], coordinate[i]))
         }
         return points
     }
